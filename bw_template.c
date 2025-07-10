@@ -840,6 +840,7 @@ int main(int argc, char *argv[])
     } else {
         int j;
         for (j = 1; j <= size; j *= 2) {
+            ctx->size = j;
             pp_wait_completions(ctx, iters);
         }
         printf("Server Done.\n");
