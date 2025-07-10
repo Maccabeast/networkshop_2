@@ -839,10 +839,11 @@ int main(int argc, char *argv[])
         printf("Client Done.\n");
     } else {
         int j;
+        int total_messages = 0;
         for (j = 1; j <= size; j *= 2) {
-            ctx->size = j;
-            pp_wait_completions(ctx, iters);
+            total_messages += iters;
         }
+        pp_wait_completions(ctx, total_messages);
         printf("Server Done.\n");
     }
 
