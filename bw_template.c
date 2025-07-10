@@ -810,13 +810,12 @@ int main(int argc, char *argv[])
     if (servername) {
         int j;
         for (j = 1; j <= size; j *= 2) {
+            ctx->size = j;
             // start timer
             struct timeval start, end;
             gettimeofday(&start, NULL);
 
-            // Perform the iterations
-            ctx->size = j;
-            int i;
+            // send all messages for specific size
             for (i = 1; i <= iters; i++) {
                 if (pp_post_send(ctx)) {
                     fprintf(stderr, "Client couldn't post send\n");
@@ -826,15 +825,15 @@ int main(int argc, char *argv[])
                     pp_wait_completions(ctx, tx_depth);
                 }
             }
-            if (iters % tx_depth != 0) {                          // last iteration
-                    pp_wait_completions(ctx, iters % tx_depth);
+            if (iters % tx_depth != 0) {
+                pp_wait_completions(ctx, iters % tx_depth);
             }
 
             gettimeofday(&end, NULL);
-            double elapsed = (end.tv_sec - start.tv_sec) + 
+            double elapsed = (end.tv_sec - start.tv_sec) +
                              (end.tv_usec - start.tv_usec) / 1e6;
-            double throughput = (j * iters) / (1024.0 * 1024.0 * elapsed); // MB/s
-            printf("  Throughput: %.2f MB/s\n", throughput);
+            double throughput = ((double)j * iters) / (1024.0 * 1024.0) / elapsed;
+            printf("Size %d bytes: %.2f MB/s\n", j, throughput);
         }
         printf("Client Done.\n");
     } else {
