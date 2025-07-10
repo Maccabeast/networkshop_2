@@ -816,6 +816,7 @@ int main(int argc, char *argv[])
             gettimeofday(&start, NULL);
 
             // send all messages for specific size
+            int i;
             for (i = 1; i <= iters; i++) {
                 if (pp_post_send(ctx)) {
                     fprintf(stderr, "Client couldn't post send\n");
