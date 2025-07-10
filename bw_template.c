@@ -30,7 +30,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-
+#define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -627,7 +627,8 @@ int main(int argc, char *argv[])
     int                      tx_depth = 100;
     int                      iters = 1000;
     int                      use_event = 0;
-    int                      size = 2^20;                           // by default allocating maximum size in the buffer
+    int                      size = 1 << 20;  // by default allocating
+    // maximum size in the buffer
     int                      sl = 0;
     int                      gidx = -1;
     char                     gid[33];
