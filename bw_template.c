@@ -916,7 +916,7 @@ int main (int argc, char *argv[])
             double duration = (end.tv_sec - start.tv_sec) +
                               (end.tv_nsec - start.tv_nsec) / 1e9;
             double throughput = (curr_size * iters) / (duration * 1024 * 1024);
-            printf ("Size: %zu\t%.2f\t Throughput: MB/s\n", curr_size,
+            printf ("Size: %zu \t%.2f\t Throughput: MB/s\n", curr_size,
                     throughput);
 
         }
