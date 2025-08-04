@@ -916,7 +916,7 @@ int main (int argc, char *argv[])
             double duration = (end.tv_sec - start.tv_sec) +
                               (end.tv_nsec - start.tv_nsec) / 1e9;
             double throughput = (curr_size * iters) / (duration * 1024 * 1024);
-            printf ("Size: %zu \tThroughput: %.2f\t MB/s\n", curr_size,
+            printf ("Size: %zu \tThroughput: %.2f MB/s\n", curr_size,
                     throughput);
 
         }
@@ -927,7 +927,6 @@ int main (int argc, char *argv[])
         for (size_t curr_size = 1; curr_size <= max_size; curr_size *= 2)
         {
             pp_wait_completions (ctx, iters);
-            printf ("hello - %zu", curr_size);
         }
         printf ("Server Done.\n");
     }
