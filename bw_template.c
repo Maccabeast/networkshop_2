@@ -926,8 +926,10 @@ int main (int argc, char *argv[])
     {
         for (size_t curr_size = 1; curr_size <= max_size; curr_size *= 2)
         {
-            pp_wait_completions (ctx, iters);
-            printf ("nigga");
+            if(pp_wait_completions (ctx, iters))
+            {
+                fprintf (stderr, "failed");
+            }
         }
         printf ("Server Done.\n");
     }
