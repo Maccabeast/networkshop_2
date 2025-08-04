@@ -623,11 +623,11 @@ int main(int argc, char *argv[])
     int                      port = 12345;
     int                      ib_port = 1;
     enum ibv_mtu             mtu = IBV_MTU_2048;
-    int                      rx_depth = 10; // TODO ask Eldar
+    int                      rx_depth = 10; // TODO ask Eldar why 10
     int                      tx_depth = 100;
     int                      iters = 1000;
     int                      use_event = 0;
-    int                      max_size = 1 << 20;
+    int                      max_size = 1 << 25;
     int                      size = max_size;
     int                      sl = 0;
     int                      gidx = -1;
@@ -807,6 +807,7 @@ int main(int argc, char *argv[])
         if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
             return 1;
 
+    // implementation starts
     if (servername) {
         struct timespec start, end;
 
@@ -816,7 +817,7 @@ int main(int argc, char *argv[])
             clock_gettime (CLOCK_MONOTONIC, &start);
 
             int i;
-            for (i = 1; i <= iters; i++)
+            for (i = 0; i < iters; i++)
             {
                 if ((i != 0) && (i % tx_depth == 0))
                 {
@@ -838,9 +839,9 @@ int main(int argc, char *argv[])
             }
             clock_gettime(CLOCK_MONOTONIC, &end);
 
-            double total_time = (end.tv_sec - start.tv_sec) +
+            double duration = (end.tv_sec - start.tv_sec) +
                                 (end.tv_nsec - start.tv_nsec) / 1e9;
-            double throughput = (size*iters * 8) / (total_time * 1024*1024);
+            double throughput = (size*iters * 8) / (duration * 1024*1024);
             printf("msg size: %zu\t%.2f\tMbps\n", size, throughput);
 
         }
