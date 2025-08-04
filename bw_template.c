@@ -808,74 +808,41 @@ int main(int argc, char *argv[])
             return 1;
 
     if (servername) {
-        int j;
-        for (j = 1; j <= size && j <= 1048576; j *= 2) {  // Cap at 1MB as suggested
-            ctx->size = j;
+        struct timespec start, end;
 
-            // Use higher precision timer
-            struct timespec start, end;
+        for (int size = 1; size <= max_size; size *= size_step){
+            ctx->size = size;
             clock_gettime(CLOCK_MONOTONIC, &start);
 
-            // send all messages for specific size
-            int i;
-            int outstanding = 0;  // Track outstanding sends
-
-            for (i = 0; i < iters; i++) {
+            for (int i = 0; i < iters; i++) {
+                if ((i != 0) && (i % tx_depth == 0)) {
+                    pp_wait_completions(ctx, tx_depth);
+                }
                 if (pp_post_send(ctx)) {
-                    fprintf(stderr, "Client couldn't post send\n");
-                    return 1;
-                }
-                outstanding++;
-
-                // Wait for completions when we reach tx_depth outstanding sends
-                if (outstanding >= tx_depth) {
-                    if (pp_wait_completions(ctx, outstanding)) {
-                        fprintf(stderr, "Failed to wait for completions\n");
-                        return 1;
-                    }
-                    outstanding = 0;
+                    fprintf(stderr, "Client couldn't post send after %d iterations, size=%d\n", i, size);
+                    return;
                 }
             }
-
-            // Wait for any remaining outstanding completions
-            if (outstanding > 0) {
-                if (pp_wait_completions(ctx, outstanding)) {
-                    fprintf(stderr, "Failed to wait for remaining completions\n");
-                    return 1;
-                }
-            }
+            pp_wait_completions(ctx, iters % tx_depth==0 ? tx_depth : iters % tx_depth);
 
             clock_gettime(CLOCK_MONOTONIC, &end);
+            double total_time = (end.tv_sec - start.tv_sec) +
+                                (end.tv_nsec - start.tv_nsec) / 1e9;
 
-            // Calculate elapsed time in seconds with nanosecond precision
-            double elapsed = (end.tv_sec - start.tv_sec) +
-                             (end.tv_nsec - start.tv_nsec) / 1e9;
-
-            // Ensure we don't divide by zero or near-zero
-            if (elapsed < 1e-9) {
-                printf("Size %d bytes: Timer resolution too low\n", j);
-                continue;
-            }
-
-            // Calculate throughput in Mbps (Megabits per second)
-            double total_bits = (double)j * iters * 8.0;  // Convert bytes to bits
-            double throughput_mbps = total_bits / (elapsed * 1e6);  // Mbps
-
-            printf("Size %d bytes: %.2f Mbps\n", j, throughput_mbps);
-        }
-        printf("Client Done.\n");
+            double throughput = calculate_throughput(size * (iters), total_time);
+            print_throughput(size, throughput);
+            printf("Client Done.\n");
     } else {
         // Server side - wait for all messages from all size iterations
-        int j;
-        int total_messages = 0;
-        for (j = 1; j <= size && j <= 1048576; j *= 2) {  // Match client loop
-            total_messages += iters;
+        for (int size = 1; size <= max_size; size *= size_step)
+        {
+            if (pp_wait_completions (ctx, iters))
+            {
+                fprintf (stderr, "Server couldn't wait for completions, size=%d\n", size);
+                return;
+            }
         }
-        if (pp_wait_completions(ctx, total_messages)) {
-            fprintf(stderr, "Server failed to wait for completions\n");
-            return 1;
-        }
-        printf("Server Done.\n");
+            }printf("Server Done.\n");
     }
     ibv_free_device_list(dev_list);
     free(rem_dest);
