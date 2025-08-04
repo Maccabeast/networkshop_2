@@ -931,6 +931,7 @@ int main (int argc, char *argv[])
                 fprintf (stderr, "Server couldn't post send\n");
                 return 1;
             }
+            printf ("hello - %zu", curr_size);
         }
         printf ("Server Done.\n");
     }
