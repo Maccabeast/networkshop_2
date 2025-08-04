@@ -839,9 +839,9 @@ int main(int argc, char *argv[])
             }
             clock_gettime(CLOCK_MONOTONIC, &end);
 
-            double duration = ((end.tv_sec - start.tv_sec) +
-                                (end.tv_nsec - start.tv_nsec)) / 1e9;
-            double throughput = (size*(iters)) / (duration * 1024*1024);
+            double duration = (end.tv_sec - start.tv_sec) +
+                                (end.tv_nsec - start.tv_nsec) / 1e9;
+            double throughput = (size * iters) / (duration * 1024 * 1024);
             printf("msg size: %zu\t%.2f\tMB/s\n", size, throughput);
 
         }
