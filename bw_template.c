@@ -50,11 +50,6 @@
 
 #define WC_BATCH (10)
 
-// Additional Definitions:
-#define BITS_IN_BYTE (8)
-#define MEGA (1024 * 1024)
-
-
 enum {
     PINGPONG_RECV_WRID = 1,
     PINGPONG_SEND_WRID = 2,
@@ -62,7 +57,7 @@ enum {
 
 static int page_size;
 
-// The most useful struct for us - used to pass information
+
 struct pingpong_context {
     struct ibv_context		*context;
     struct ibv_comp_channel	*channel;
@@ -132,6 +127,7 @@ void gid_to_wire_gid(const union ibv_gid *gid, char wgid[])
     for (i = 0; i < 4; ++i)
         sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *)(gid->raw + i * 4)));
 }
+
 static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
                           enum ibv_mtu mtu, int sl,
                           struct pingpong_dest *dest, int sgid_idx)
@@ -534,7 +530,7 @@ static int pp_post_send(struct pingpong_context *ctx)
     struct ibv_send_wr *bad_wr, wr = {
         .wr_id	    = PINGPONG_SEND_WRID,
         .sg_list    = &list,
-        .num_sge    = 1, // length of the list
+        .num_sge    = 1,
         .opcode     = IBV_WR_SEND,
         .send_flags = IBV_SEND_SIGNALED,
         .next       = NULL
@@ -615,69 +611,6 @@ static void usage(const char *argv0)
     printf("  -g, --gid-idx=<gid index> local port gid index\n");
 }
 
-///////////////// HELPER FUNCTIONS ////////////////
-
-double calculate_throughput(size_t bytes, double seconds) {
-    return (bytes * BITS_IN_BYTE) / (seconds * MEGA); // Convert to Mbps
-}
-
-void print_throughput(size_t size, double throughput) {
-    printf("%zu\t%.2f\tMbps\n", size, throughput);
-}
-
-void client_send_operation(int max_size, int size_step, int iters, struct pingpong_context *ctx, int tx_depth) {
-    struct timespec start, end;
-    int outstanding = 0;
-
-    for (int size = 1; size <= max_size; size *= size_step){
-        ctx->size = size;
-        outstanding = 0;
-
-        clock_gettime(CLOCK_MONOTONIC, &start);
-
-        for (int i = 0; i < iters; i++) {
-            if (pp_post_send(ctx)) {
-                fprintf(stderr, "Client couldn't post send after %d iterations, size=%d\n", i, size);
-                return;
-            }
-            outstanding++;
-
-            // Better pipelining - don't wait every tx_depth, but keep pipeline full
-            if (outstanding >= tx_depth) {
-                if (pp_wait_completions(ctx, tx_depth / 2)) {
-                    fprintf(stderr, "Failed to wait for completions\n");
-                    return;
-                }
-                outstanding -= tx_depth / 2;
-            }
-        }
-
-        // Wait for remaining completions
-        if (outstanding > 0) {
-            pp_wait_completions(ctx, outstanding);
-        }
-
-        clock_gettime(CLOCK_MONOTONIC, &end);
-        double total_time = (end.tv_sec - start.tv_sec) +
-                            (end.tv_nsec - start.tv_nsec) / 1e9;
-
-        double throughput = calculate_throughput(size * (iters), total_time);
-        print_throughput(size, throughput);
-    }
-}
-
-void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size, int size_step) {
-
-    for (int size = 1; size <= max_size; size *= size_step){
-        if(pp_wait_completions(ctx, iters)) {
-            fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
-            return;
-        }
-    }
-}
-
-////////////// MAIN ///////////////
-
 int main(int argc, char *argv[])
 {
     struct ibv_device      **dev_list;
@@ -686,17 +619,16 @@ int main(int argc, char *argv[])
     struct pingpong_dest     my_dest;
     struct pingpong_dest    *rem_dest;
     char                    *ib_devname = NULL;
-    char                    *servername = NULL; // Modified: added `= NULL`
+    char                    *servername; // TODO ask Eldar why null
     int                      port = 12345;
     int                      ib_port = 1;
     enum ibv_mtu             mtu = IBV_MTU_2048;
-    int                      rx_depth = 10; // Modified: changed from 100 to 10
+    int                      rx_depth = 10; // TODO ask Eldar
     int                      tx_depth = 100;
     int                      iters = 1000;
     int                      use_event = 0;
-    int                      max_size = 1 << 25; // Added
-    int                      size = max_size; // Cha
-    int                      size_step = 2; // Added
+    int                      max_size = 1 << 20
+    int                      size = max_size;
     int                      sl = 0;
     int                      gidx = -1;
     char                     gid[33];
@@ -783,7 +715,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (optind == argc - 1) // If in case of client (./file_name <servername>)
+    if (optind == argc - 1)
         servername = strdup(argv[optind]);
     else if (optind < argc) {
         usage(argv[0]);
@@ -875,11 +807,52 @@ int main(int argc, char *argv[])
         if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
             return 1;
 
-    // Start of code
     if (servername) {
-        client_send_operation(max_size, size_step, iters, ctx, tx_depth);
+        struct timespec start, end;
+
+        for (int size = 1; size <= max_size; size *= 2)
+        {
+            ctx->size = size;
+            clock_gettime (CLOCK_MONOTONIC, &start);
+
+            int i;
+            for (i = 1; i <= iters; i++)
+            {
+                if ((i != 0) && (i % tx_depth == 0))
+                {
+                    pp_wait_completions (ctx, tx_depth);
+                }
+                if (pp_post_send (ctx))
+                {
+                    fprintf (stderr, "Client couldn't post send\n");
+                    return 1;
+                }
+            }
+            if(iters % tx_depth == 0)
+            {
+                pp_wait_completions(ctx, tx_depth);
+            }
+            else
+            {
+                pp_wait_completions(ctx, iters % tx_depth);
+            }
+            clock_gettime(CLOCK_MONOTONIC, &end);
+
+            double total_time = (end.tv_sec - start.tv_sec) +
+                                (end.tv_nsec - start.tv_nsec) / 1e9;
+            double throughput = (size*iters * 8) / (total_time * 1024*1024);
+            printf("msg size: %zu\t%.2f\tMbps\n", size, throughput);
+
+        }
+        printf("Client Done.\n");
     } else {
-        server_recv_operation(ctx, iters, max_size, size_step);
+        for (int size = 1; size <= max_size; size *= 2){
+            if(pp_wait_completions(ctx, iters)) {
+                fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
+                return;
+            }
+        }
+        printf("Server Done.\n");
     }
 
     ibv_free_device_list(dev_list);
