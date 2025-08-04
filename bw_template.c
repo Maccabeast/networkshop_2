@@ -683,7 +683,7 @@ int main (int argc, char *argv[])
     int tx_depth = 100;
     int iters = 1000;
     int use_event = 0;
-    int max_size = 1 << 25;
+    int max_size = 1 << 20;
     int size = max_size;
     int sl = 0;
     int gidx = -1;
@@ -925,12 +925,11 @@ int main (int argc, char *argv[])
     {
         for (size_t curr_size = 1; curr_size <= max_size; curr_size *= 2)
         {
-            if(pp_post_send(ctx))
+            if(pp_wait_completions (ctx, iters))
             {
                 fprintf (stderr, "Server couldn't post send\n");
                 return 1;
             }
-            pp_wait_completions (ctx, iters);
         }
         printf ("Server Done.\n");
     }
