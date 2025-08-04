@@ -616,14 +616,6 @@ static void usage(const char *argv0)
 }
 
 
-
-
-
-
-
-
-
-
 ///////////////// HELPER FUNCTIONS ////////////////
 
 double calculate_throughput(size_t bytes, double seconds) {
@@ -637,43 +629,64 @@ void print_throughput(size_t size, double throughput) {
 void client_send_operation(int max_size, int size_step, int iters, struct pingpong_context *ctx, int tx_depth) {
     struct timespec start, end;
 
-    for (int size = 1; size <= max_size; size *= size_step){
+    for (int size = 1; size <= max_size && size <= 1048576; size *= size_step) {
         ctx->size = size;
         clock_gettime(CLOCK_MONOTONIC, &start);
 
+        int outstanding = 0;
         for (int i = 0; i < iters; i++) {
-            if ((i != 0) && (i % tx_depth == 0)) {
-                pp_wait_completions(ctx, tx_depth);
-            }
-
             if (pp_post_send(ctx)) {
                 fprintf(stderr, "Client couldn't post send after %d iterations, size=%d\n", i, size);
                 return;
             }
+            outstanding++;
+
+            // Wait for completions when we reach tx_depth outstanding sends
+            if (outstanding >= tx_depth) {
+                if (pp_wait_completions(ctx, outstanding)) {
+                    fprintf(stderr, "Failed to wait for completions\n");
+                    return;
+                }
+                outstanding = 0;
+            }
         }
-        pp_wait_completions(ctx, iters % tx_depth==0 ? tx_depth : iters %
-        tx_depth);
+
+        // Wait for any remaining outstanding completions
+        if (outstanding > 0) {
+            if (pp_wait_completions(ctx, outstanding)) {
+                fprintf(stderr, "Failed to wait for remaining completions\n");
+                return;
+            }
+        }
 
         clock_gettime(CLOCK_MONOTONIC, &end);
         double total_time = (end.tv_sec - start.tv_sec) +
                             (end.tv_nsec - start.tv_nsec) / 1e9;
 
-        double throughput = calculate_throughput(size * (iters), total_time);
+        // Ensure we don't divide by zero or near-zero
+        if (total_time < 1e-9) {
+            printf("Size %d bytes: Timer resolution too low\n", size);
+            continue;
+        }
+
+        double throughput = calculate_throughput(size * iters, total_time);
         print_throughput(size, throughput);
     }
 }
 
 void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size, int size_step) {
-
-    for (int size = 1; size <= max_size; size *= size_step){
-        if(pp_wait_completions(ctx, iters)) {
-            fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
-            return;
-        }
+    // Calculate total messages the server expects to receive
+    int total_messages = 0;
+    for (int size = 1; size <= max_size && size <= 1048576; size *= size_step) {
+        total_messages += iters;
     }
 
+    // Wait for all messages from all size iterations
+    if (pp_wait_completions(ctx, total_messages)) {
+        fprintf(stderr, "Server couldn't wait for completions\n");
+        return;
+    }
 }
-
 
 ////////////// MAIN ///////////////
 
