@@ -811,23 +811,35 @@ int main(int argc, char *argv[])
         int j;
         for (j = 1; j <= size; j *= 2) {
             ctx->size = j;
+
             // start timer
             struct timeval start, end;
             gettimeofday(&start, NULL);
 
             // send all messages for specific size
             int i;
-            for (i = 1; i <= iters; i++) {
+            for (i = 0; i < iters; i++) {
                 if (pp_post_send(ctx)) {
                     fprintf(stderr, "Client couldn't post send\n");
                     return 1;
                 }
-                if (i % tx_depth == 0) {
-                    pp_wait_completions(ctx, tx_depth);
+
+                // Wait for completion after every tx_depth sends or at the end
+                if ((i + 1) % tx_depth == 0) {
+                    if (pp_wait_completions(ctx, tx_depth)) {
+                        fprintf(stderr, "Failed to wait for completions\n");
+                        return 1;
+                    }
                 }
             }
-            if (iters % tx_depth != 0) {
-                pp_wait_completions(ctx, iters % tx_depth);
+
+            // Handle remaining completions if iters is not divisible by tx_depth
+            int remaining = iters % tx_depth;
+            if (remaining != 0) {
+                if (pp_wait_completions(ctx, remaining)) {
+                    fprintf(stderr, "Failed to wait for remaining completions\n");
+                    return 1;
+                }
             }
 
             gettimeofday(&end, NULL);
@@ -838,12 +850,16 @@ int main(int argc, char *argv[])
         }
         printf("Client Done.\n");
     } else {
+        // Server side - wait for all messages from all size iterations
         int j;
         int total_messages = 0;
         for (j = 1; j <= size; j *= 2) {
             total_messages += iters;
         }
-        pp_wait_completions(ctx, total_messages);
+        if (pp_wait_completions(ctx, total_messages)) {
+            fprintf(stderr, "Server failed to wait for completions\n");
+            return 1;
+        }
         printf("Server Done.\n");
     }
 
