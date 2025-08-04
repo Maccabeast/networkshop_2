@@ -811,9 +811,9 @@ int main(int argc, char *argv[])
     if (servername) {
         struct timespec start, end;
 
-        for (int size = 1; size <= max_size; size *= 2)
+        for (size_t curr_size = 1; curr_size <= max_size; curr_size *= 2)
         {
-            ctx->size = size;
+            ctx->size = curr_size;
             clock_gettime (CLOCK_MONOTONIC, &start);
 
             int i;
@@ -841,15 +841,15 @@ int main(int argc, char *argv[])
 
             double duration = (end.tv_sec - start.tv_sec) +
                                 (end.tv_nsec - start.tv_nsec) / 1e9;
-            double throughput = (size * iters) / (duration * 1024 * 1024);
-            printf("msg size: %zu\t%.2f\tMB/s\n", size, throughput);
+            double throughput = (curr_size * iters) / (duration * 1024 * 1024);
+            printf("msg size: %zu\t%.2f\tMB/s\n", curr_size, throughput);
 
         }
         printf("Client Done.\n");
     } else {
-        for (int size = 1; size <= max_size; size *= 2){
+        for (size_t curr_size = 1; curr_size <= max_size; curr_size *= 2){
             if(pp_wait_completions(ctx, iters)) {
-                fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
+                fprintf(stderr, "Server couldn't post send\n");
                 return 1;
             }
         }
